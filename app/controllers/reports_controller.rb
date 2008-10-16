@@ -48,9 +48,23 @@ class ReportsController < ApplicationController
 			params[:id] = params[:id].sub(/\s/, "+")
 			redirect_to "/reports/cohort/#{params[:id]}" and return 
     end
-
     render :layout => "application" #this forces the default application layout to be used which gives us the touchscreen toolkit
   end
+  
+  
+#WTK
+  def select_encounters_by_providers
+
+	# this action sets up the form that lists all of the available time periods
+	# after selecting one it sends it to the encounters by providers action below
+
+	if params[:id]
+			params[:id] = params[:id].tr(" ", "+")
+			redirect_to "/reports/encounters_by_providers/#{params[:id]}" and return 
+	end
+        render :layout => "application" #this forces the default application layout to be used which gives us the touchscreen toolkit
+  end
+#WTK 
   
   def set_cohort_date_range
     if params[:start_year].nil? or params[:end_year].nil?
@@ -75,6 +89,118 @@ class ReportsController < ApplicationController
       redirect_to :action => "cohort", :id => params[:id], :start_date => start_date, :end_date => end_date
     end
   end
+#WTK
+def encounters_by_providers
+	redirect_to :action => 'select_encounters_by_providers' and return if params[:id].nil?
+	
+	@params_id = params["id"] #for debugging
+	
+	#TODO: this week and last week has an edge case problem for midnight on sunday, not a big deal, but should be fixed
+	case params["id"]
+		when "Cumulative"
+			start_datetime = Encounter.find(:first, :order => 'encounter_datetime', 
+										:conditions => 'encounter_datetime is not NULL and encounter_datetime <> \'0000-00-00\'').encounter_datetime
+			start_datetime = start_datetime.year.to_s + '-' +start_datetime.month.to_s + '-' +start_datetime.day.to_s + ' 00:00:00'
+			end_datetime = Time.now
+			end_datetime = time_to_sql_string(end_datetime)
+		when "Today"
+			start_datetime = Time.today
+			start_datetime = time_to_sql_string(start_datetime)
+			end_datetime = Time.today+1.day-1.second 	#11:59:59pm, today
+			end_datetime = time_to_sql_string(end_datetime)
+		when "Last+24+hours"
+			start_datetime = Time.now-1.day
+			start_datetime = time_to_sql_string(start_datetime)
+			end_datetime = Time.now
+			end_datetime = time_to_sql_string(end_datetime)
+		when "Last+7+days"
+			start_datetime = Time.now-7.days
+			start_datetime = time_to_sql_string(start_datetime)
+			end_datetime = Time.now
+			end_datetime = time_to_sql_string(end_datetime)
+		when "This+week"
+			start_datetime = Time.today
+			start_datetime = start_datetime.at_beginning_of_week
+			start_datetime = time_to_sql_string(start_datetime)
+			end_datetime = Time.today
+			end_datetime = time_to_sql_string(end_datetime)
+		when "Last+week"
+			start_datetime = Time.today - 7.days
+			start_datetime = start_datetime.at_beginning_of_week
+			start_datetime = time_to_sql_string(start_datetime)
+			end_datetime = Time.today - 7.days
+			end_datetime =end_datetime.at_beginning_of_week 
+			end_datetime =end_datetime +7.days
+			end_datetime = time_to_sql_string(end_datetime)
+		
+		#need to add date picker
+		when "Custom+period"
+			start_datetime = params[:start_date]
+			end_datetime = params[:end_date]
+		else
+			redirect_to :action => 'select_encounters_by_providers' and return
+	end
+	@results = user_encounter_crosstab_sql(start_datetime, end_datetime)
+	@results.collect{|r|
+					u =  User.find(:first, :conditions => "user_id = '#{r.provider_id}'")
+					if u then r["username"] = u.username else r["username"] = "NULL" end
+						
+					et = EncounterType.find(:first, :conditions => "encounter_type_id = '#{r.encounter_type}'")	
+					if et then r["encounter_type_name"] = et.name else r["encounter_type_name"] = "NULL" end
+					
+				  }
+
+	@results_array = []
+	@labels_array = ["Username"]
+	EncounterType.find(:all).collect {|et|  @labels_array << et.name}
+	@labels_array << "NULL"
+	@users_array = [] 
+	@results.collect{|u|  @users_array << u.username unless @users_array.include?(u.username) }
+	  
+	@end = end_datetime
+	@start = start_datetime
+end
+
+#this takes an instance of the Ruby Time class and makes it look right for a mysql querry
+def time_to_sql_string(time)
+	return " #{time.year}-#{time.month}-#{time.day} #{time.hour}:#{time.min}:#{time.sec}"
+end
+	
+	
+#this should probably be in a model
+def user_encounter_crosstab(start_datetime, end_datetime)
+		#This works, but is slow
+		results = Hash.new()  # Create a hash to hold our data
+		Encounter.find(:all, :conditions => ["date_created > '#{start_datetime}' and date_created < '#{end_datetime}'"] ).collect{|en| 
+		
+				if results[en.provider_id].nil? then#check if provider_id has been seen before
+					results[en.provider_id] = Hash.new(0)  #if it hasn't create a new hash
+				end
+				
+				if  results[en.provider_id][en.encounter_type].nil? then #check if provider/encounter has been seen before
+					results[en.provider_id][en.encounter_type] = 1 #if not initialize
+				else 
+					results[en.provider_id][en.encounter_type] += 1  #if so increment
+				end
+			}
+		#~ #This is not working the way I think it should, it seems to only do one of the groupings
+		#~ results = Encounter.count(:all, :group => :provider_id , :group =>:encounter_type, 
+			#~ :conditions =>  ["date_created > '#{start_datetime}' and date_created < '#{end_datetime}'"] )
+		return results
+	
+end
+#This does not seem like the ruby way of doing it, but its fast and works
+def user_encounter_crosstab_sql(start_datetime, end_datetime)
+	sql_string = "SELECT e.provider_id, e.encounter_type, count(*) as count 
+		  FROM openmrs_development.encounter e  
+		  WHERE encounter_datetime > '#{start_datetime}' AND encounter_datetime < '#{end_datetime}'
+		  GROUP BY e.provider_id, e.encounter_type "
+	results = Encounter.find_by_sql([sql_string])
+
+	return results
+end
+#WTK
+
 
   def cohort
 
@@ -432,7 +558,7 @@ HAVING (encounter.encounter_type = #{EncounterType.find_by_name('Give drugs').id
         when "Cohort"
            redirect_to :action => "select_cohort"
            return
-        when "Survival Analysis"
+        when "Survival Analysis" #should this be hard coded? maybe use the most recently completed quarter, or just use today
            redirect_to :action => 'survival_analysis', :id => 'Q3+2008'
            return
         when "Missed appointments"
@@ -444,6 +570,11 @@ HAVING (encounter.encounter_type = #{EncounterType.find_by_name('Give drugs').id
         when "Drug quantities"
            redirect_to :action => "select_monthly_drug_quantities"
            return
+	#WTK
+	when "Encounters by providers"
+           redirect_to :action => "select_encounters_by_providers"
+           return
+	#WTK
       end
     end
 

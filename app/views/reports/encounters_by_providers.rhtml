@@ -1,0 +1,37 @@
+<!-- WTK -->
+<%= render :partial => 'header' %>
+
+<h1 id="encounters_by_providers_title"> Number of encounters by providers.</h1>
+
+<h4> <%= "Report period: <i>#{(@start.to_datetime).strftime("%d %b %Y %I:%M %p")} </i>  to  <i>#{@end.to_datetime.strftime("%d %b %Y %I:%M %p")}</i>" %></h4>
+
+<table>
+<tr span=50%><td><%= @users_array %></td><td class="valueCol">@users_array</td></tr>
+<tr span=50%><td><%= @labels_array %></td><td class="valueCol">@labels_array</td></tr>
+<tr span=50%><td><%= @results_array %></td><td class="valueCol">@results_array</td></tr>
+<tr span=50%><td><%= @params_id %></td><td class="valueCol">@params_id</td></tr>
+<tr span=50%><td><pre><%=@results.to_yaml%></pre></td><td class="valueCol">@results.to_yaml</td></tr><tr span=50%>
+</table>
++++++++++++++++++++++++++++++++
+<table>
+<tr> <th align='left' >Username</pre></th> <th align='left'>Encounter type</th> <th align='left'>Count</th></tr>
+<%= 
+		#TODO: HELP:  Neither of these sort_by is doing what I want to the displayed output
+		#@results = @results.sort_by {'username'}
+		(@results.sort_by {'count'}).collect{|r|
+			"<tr> <td><pre>#{r['username']}</pre></td> <td>#{r['encounter_type_name']}</td> <td>#{r['count']}</td></tr>"
+			    }
+%>
+</table>
+************************************************
+
+<table>
+<tr>
+<%= 	@labels_array.collect{|lab|" <th>#{lab}</th> "   }    %>
+</tr>
+
+<%= 
+		@results_array.collect{|lab|" <th>#{lab}</th> "   } 
+%>
+</table>
+<!-- WTK -->
