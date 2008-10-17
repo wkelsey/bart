@@ -60,12 +60,17 @@ class ReportsController < ApplicationController
 
 	if params[:id]
 			params[:id] = params[:id].tr(" ", "+")
+			if params[:id] == "Custom+period" then 
+				redirect_to "/reports/set_cohort_date_range/#{params[:id]}" and return
+			else
 			redirect_to "/reports/encounters_by_providers/#{params[:id]}" and return 
+			end
 	end
         render :layout => "application" #this forces the default application layout to be used which gives us the touchscreen toolkit
   end
 #WTK 
   
+ #WTK  
   def set_cohort_date_range
     if params[:start_year].nil? or params[:end_year].nil?
       @needs_date_picker = true
@@ -86,14 +91,16 @@ class ReportsController < ApplicationController
     else
       start_date = "#{params[:start_year]}-#{params[:start_month]}-#{params[:start_day]}"
       end_date = "#{params[:end_year]}-#{params[:end_month]}-#{params[:end_day]}"
-      redirect_to :action => "cohort", :id => params[:id], :start_date => start_date, :end_date => end_date
+      redirect_to :action => "encounters_by_providers", :id => params[:id], :start_date => start_date, :end_date => end_date
     end
   end
+  #WTK 
 #WTK
 def encounters_by_providers
 	redirect_to :action => 'select_encounters_by_providers' and return if params[:id].nil?
 	
 	@params_id = params["id"] #for debugging
+	
 	
 	#TODO: this week and last week has an edge case problem for midnight on sunday, not a big deal, but should be fixed
 	case params["id"]
@@ -135,28 +142,72 @@ def encounters_by_providers
 		
 		#need to add date picker
 		when "Custom+period"
-			start_datetime = params[:start_date]
-			end_datetime = params[:end_date]
+			start_datetime = "#{params[:start_date]} 00:00:00"
+			end_datetime = "#{params[:end_date]} 23:59:59"
+
 		else
 			redirect_to :action => 'select_encounters_by_providers' and return
 	end
 	@results = user_encounter_crosstab_sql(start_datetime, end_datetime)
+	# Go through the results (Encounter objects) and adds attributes for the username of the provider, the encounter type name, and provider's role
 	@results.collect{|r|
 					u =  User.find(:first, :conditions => "user_id = '#{r.provider_id}'")
 					if u then r["username"] = u.username else r["username"] = "NULL" end
-						
+					
+			##############   add user role ###############
+					ri =  UserRole.find(:first, :conditions => "user_id = '#{r.provider_id}'")  #only looking for first user role, might need to do better
+					if ri then role = Role.find(:first,:conditions => "role_id =  '#{ri.role_id}'") end
+					if role then r["role"] = role.role else r["role"] = "NULL" end
+					
+					
 					et = EncounterType.find(:first, :conditions => "encounter_type_id = '#{r.encounter_type}'")	
 					if et then r["encounter_type_name"] = et.name else r["encounter_type_name"] = "NULL" end
 					
 				  }
 
-	@results_array = []
-	@labels_array = ["Username"]
+	
+	
+	@labels_array = []
 	EncounterType.find(:all).collect {|et|  @labels_array << et.name}
 	@labels_array << "NULL"
+	
 	@users_array = [] 
-	@results.collect{|u|  @users_array << u.username unless @users_array.include?(u.username) }
+	#@results.collect{|u|  @users_array << u.username unless @users_array.include?(u.username) }
+	@users_array = @results.collect{|u|  u.username }.uniq.sort #mike's way
+	#@users_array = @users_array.sort!
+	@results_array = []
+	@users_array.collect{|u|
+					    temp_user_array = [u] #first item is the username
+					    for r in @results do
+							if r.username == u then 
+								temp_user_array << r.role
+								break
+							end
+					    end
+					    
+					    temp_count_total = 0
+					   @labels_array.collect{|e|  #then we go through all the results and add the counts for all the encounter types, and get total
+										x=0 #will hold number of encounters for this user and encounter type
+										for r in @results do
+													      if (r.username == u and r.encounter_type_name == e) then 
+														      x = r.count.to_i
+														      break
+													      end
+										end										
+										temp_user_array << x
+										temp_count_total += x
+										
+										
+									      }
+					   temp_user_array << temp_count_total
+					   @results_array << temp_user_array
+					   
+					   }
 	  
+	  #prepend Username to the array
+	@labels_array = ["Username", "Role"] + @labels_array
+	@labels_array << "total"
+	
 	@end = end_datetime
 	@start = start_datetime
 end
@@ -192,7 +243,7 @@ end
 #This does not seem like the ruby way of doing it, but its fast and works
 def user_encounter_crosstab_sql(start_datetime, end_datetime)
 	sql_string = "SELECT e.provider_id, e.encounter_type, count(*) as count 
-		  FROM openmrs_development.encounter e  
+		  FROM encounter e  
 		  WHERE encounter_datetime > '#{start_datetime}' AND encounter_datetime < '#{end_datetime}'
 		  GROUP BY e.provider_id, e.encounter_type "
 	results = Encounter.find_by_sql([sql_string])
