@@ -1,7 +1,7 @@
 <!-- WTK -->
-<%= render :partial => 'header' %>
+<%= render :partial => 'header_encounter_provider' %>
 
-<h1 id="encounters_by_providers_title"> Number of encounters by providers.</h1>
+<h1 id="encounters_by_providers_title"><%=Location.current_arv_code %>: Number of encounters by providers.</h1>
 
 <h4> <%= "Report period: <i>#{(@start.to_datetime).strftime("%d %b %Y %I:%M %p")} </i>  to  <i>#{@end.to_datetime.strftime("%d %b %Y %I:%M %p")}</i>" %></h4>
 
@@ -28,12 +28,10 @@
 <tr span=50%><td><%= @labels_array %></td><td class="valueCol">@labels_array</td></tr>
 <tr span=50%><td><%= @results_array.type %></td><td class="valueCol">@results_array.type</td></tr>
 <tr span=50%><td><%= @results_array.length %></td><td class="valueCol">@results_array.length</td></tr>
-<tr span=50%><td><%= @results_array[0] %></td><td class="valueCol">@results_array[0]</td></tr>
-<tr span=50%><td><%= @results_array[0].type %></td><td class="valueCol">@results_array[0].type</td></tr>
-<tr span=50%><td><%= @results_array[0].length %></td><td class="valueCol">@results_array[0].length</td></tr>
 <tr span=50%><td><pre><%= @results_array.to_yaml %></pre></td><td class="valueCol">@results_array</td></tr>
 <tr span=50%><td><%= @params_id %></td><td class="valueCol">@params_id</td></tr>
 <tr span=50%><td><pre><%=@results.to_yaml%></pre></td><td class="valueCol">@results.to_yaml</td></tr><tr span=50%>
+<tr span=50%><td><pre><%=@results_hashes.to_yaml%></pre></td><td class="valueCol">@results_hashes.to_yaml</td></tr><tr span=50%>
 </table>
 ++++++++++++++++++++++++++++++
 ++++++++++++++++++++++++++++++

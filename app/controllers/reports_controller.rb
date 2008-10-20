@@ -61,7 +61,7 @@ class ReportsController < ApplicationController
 	if params[:id]
 			params[:id] = params[:id].tr(" ", "+")
 			if params[:id] == "Custom+period" then 
-				redirect_to "/reports/set_cohort_date_range/#{params[:id]}" and return
+				redirect_to "/reports/set_date_range/#{params[:id]}" and return
 			else
 			redirect_to "/reports/encounters_by_providers/#{params[:id]}" and return 
 			end
@@ -69,8 +69,7 @@ class ReportsController < ApplicationController
         render :layout => "application" #this forces the default application layout to be used which gives us the touchscreen toolkit
   end
 #WTK 
-  
- #WTK  
+
   def set_cohort_date_range
     if params[:start_year].nil? or params[:end_year].nil?
       @needs_date_picker = true
@@ -91,6 +90,28 @@ class ReportsController < ApplicationController
     else
       start_date = "#{params[:start_year]}-#{params[:start_month]}-#{params[:start_day]}"
       end_date = "#{params[:end_year]}-#{params[:end_month]}-#{params[:end_day]}"
+      redirect_to :action => "cohort", :id => params[:id], :start_date => start_date, :end_date => end_date
+    end
+  end
+
+#WTK    REFACTOR:  This should use a common fonction with the set_cohort_date_range
+  def set_date_range
+    if params[:start_year].nil? or params[:end_year].nil?
+      @needs_date_picker = true
+      day=Array.new(31){|d|d + 1 } 
+
+      @days = [""].concat day
+
+      @monthOptions = "<option>" "" "</option>"
+  1.upto(12){ |number| 
+       @monthOptions += "<option value = '" + number.to_s + "'>" + Date::MONTHNAMES[number] + "</option>"
+      }
+
+      @min_date = Encounter.find(:first, :order => 'encounter_datetime').encounter_datetime.to_date 
+      render :layout => "application" 
+    else
+      start_date = "#{params[:start_year]}-#{params[:start_month]}-#{params[:start_day]}"
+      end_date = "#{params[:end_year]}-#{params[:end_month]}-#{params[:end_day]}"
       redirect_to :action => "encounters_by_providers", :id => params[:id], :start_date => start_date, :end_date => end_date
     end
   end
@@ -98,9 +119,7 @@ class ReportsController < ApplicationController
 #WTK
 def encounters_by_providers
 	redirect_to :action => 'select_encounters_by_providers' and return if params[:id].nil?
-	
 	@params_id = params["id"] #for debugging
-	
 	
 	#TODO: this week and last week has an edge case problem for midnight on sunday, not a big deal, but should be fixed
 	case params["id"]
@@ -149,8 +168,10 @@ def encounters_by_providers
 			redirect_to :action => 'select_encounters_by_providers' and return
 	end
 	@results = user_encounter_crosstab_sql(start_datetime, end_datetime)
+	@results_hashes = user_encounter_crosstab(start_datetime, end_datetime)
 	# Go through the results (Encounter objects) and adds attributes for the username of the provider, the encounter type name, and provider's role
 	@results.collect{|r|
+					# get the usernames
 					u =  User.find(:first, :conditions => "user_id = '#{r.provider_id}'")
 					if u then r["username"] = u.username else r["username"] = "NULL" end
 					
@@ -218,7 +239,7 @@ def time_to_sql_string(time)
 end
 	
 	
-#this should probably be in a model
+#Should this  be in the User model?  Creae a hash of hashes: {provider_id => {encounter_type_id => number or encounters, ...}, ...}
 def user_encounter_crosstab(start_datetime, end_datetime)
 		#This works, but is slow
 		results = Hash.new()  # Create a hash to hold our data
@@ -233,7 +254,11 @@ def user_encounter_crosstab(start_datetime, end_datetime)
 				else 
 					results[en.provider_id][en.encounter_type] += 1  #if so increment
 				end
-			}
+				
+########################add totals 
+		}
+		#users = Encounter.find(:all, :conditions => ["date_created > '#{start_datetime}' and date_created < '#{end_datetime}'"] ).collect{|en|
+			
 		#~ #This is not working the way I think it should, it seems to only do one of the groupings
 		#~ results = Encounter.count(:all, :group => :provider_id , :group =>:encounter_type, 
 			#~ :conditions =>  ["date_created > '#{start_datetime}' and date_created < '#{end_datetime}'"] )
@@ -247,7 +272,15 @@ def user_encounter_crosstab_sql(start_datetime, end_datetime)
 		  WHERE encounter_datetime > '#{start_datetime}' AND encounter_datetime < '#{end_datetime}'
 		  GROUP BY e.provider_id, e.encounter_type "
 	results = Encounter.find_by_sql([sql_string])
-
+	#turn the array of objects into a hash of hashes
+	results_hash = Hash.new()
+	#~ for r in results {
+		
+		#~ ###################
+		#~ ##### fill this in #######
+		#~ ###################
+		
+	#~ {
 	return results
 end
 #WTK
