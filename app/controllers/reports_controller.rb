@@ -119,9 +119,8 @@ class ReportsController < ApplicationController
 #WTK
 def encounters_by_providers
 	redirect_to :action => 'select_encounters_by_providers' and return if params[:id].nil?
-	@params_id = params["id"] #for debugging
 	
-	#TODO: this week and last week has an edge case problem for midnight on sunday, not a big deal, but should be fixed
+	#FIXME: I think that this week and last week has an overlapping boundry problem for midnight on sunday, not a big deal, but should be fixed.
 	case params["id"]
 		when "Cumulative"
 			start_datetime = Encounter.find(:first, :order => 'encounter_datetime', 
@@ -158,63 +157,75 @@ def encounters_by_providers
 			end_datetime =end_datetime.at_beginning_of_week 
 			end_datetime =end_datetime +7.days
 			end_datetime = time_to_sql_string(end_datetime)
-		
-		#need to add date picker
 		when "Custom+period"
+			# Dates will be made inclusive by serching from midnight on the start date to 23:59:59 on the end date.
 			start_datetime = "#{params[:start_date]} 00:00:00"
 			end_datetime = "#{params[:end_date]} 23:59:59"
 
 		else
 			redirect_to :action => 'select_encounters_by_providers' and return
 	end
+	# FIXME: user_encounter_crosstab_sql() is much faster than user_encounter_crosstab(), but is not very ruby like.
 	@results = user_encounter_crosstab_sql(start_datetime, end_datetime)
-	@results_hashes = user_encounter_crosstab(start_datetime, end_datetime)
-	# Go through the results (Encounter objects) and adds attributes for the username of the provider, the encounter type name, and provider's role
-	@results.collect{|r|
+	#~ @results = user_encounter_crosstab(start_datetime, end_datetime)
+
+	# Go through the results (each a hash) and add attributes for the username of the provider, the encounter type name, and provider's role
+	@results.each_key{|provider_id|
 					# get the usernames
-					u =  User.find(:first, :conditions => "user_id = '#{r.provider_id}'")
-					if u then r["username"] = u.username else r["username"] = "NULL" end
+					u =  User.find(:first, :conditions => "user_id = '#{provider_id}'")
+					if u then 
+						@results[provider_id]["username"] = u.username 
+					else 
+							@results[provider_id]["username"] = "NULL" 
+					end
 					
-			##############   add user role ###############
-					ri =  UserRole.find(:first, :conditions => "user_id = '#{r.provider_id}'")  #only looking for first user role, might need to do better
-					if ri then role = Role.find(:first,:conditions => "role_id =  '#{ri.role_id}'") end
-					if role then r["role"] = role.role else r["role"] = "NULL" end
+					#get the user roles, 
+					#FIXME: only looking for first user role, might need to do better
+					ri =  UserRole.find(:first, :conditions => "user_id = '#{provider_id}'")  #
+					if ri then 
+						role = Role.find(:first,:conditions => "role_id =  '#{ri.role_id}'") 
+					end
 					
+					if role then 
+						@results[provider_id]["role"] = role.role 
+					else 
+						@results[provider_id]["role"] = "NULL" 
+					end
 					
-					et = EncounterType.find(:first, :conditions => "encounter_type_id = '#{r.encounter_type}'")	
-					if et then r["encounter_type_name"] = et.name else r["encounter_type_name"] = "NULL" end
+					#~ #get the encounter_types 
+					#~ et = EncounterType.find(:first, :conditions => "encounter_type_id = '#{@results[provider_id]['encounter_type']}'")	
+					#~ if et then @results[provider_id]["encounter_type_name"] = et.name else @results[provider_id]["encounter_type_name"] = "NULL" end
 					
 				  }
 
 	
 	
 	@labels_array = []
-	EncounterType.find(:all).collect {|et|  @labels_array << et.name}
-	@labels_array << "NULL"
+	#FIXME : Need to make the encounter type ids for nill and undefined (in the encounter type table) equal to "NULL"
+	EncounterType.find(:all).collect {|et|  @labels_array << [ et.name, et.encounter_type_id]}
+	#FIXME : Need to make the encounter type ids for nill and undefined (in the encounter type table) equal to "NULL"
+	@labels_array << ["NULL",nil]
 	
+	#Build up an array of all the user names in alphabetical order
 	@users_array = [] 
-	#@results.collect{|u|  @users_array << u.username unless @users_array.include?(u.username) }
-	@users_array = @results.collect{|u|  u.username }.uniq.sort #mike's way
-	#@users_array = @users_array.sort!
+	@results.each_key{|u|  @users_array << [@results[u]["username"], u] }
+	@users_array.sort!	
+	
 	@results_array = []
+	#Build up the @results_array array, one user at a time. Each user will get one row in the crosstab table.  Each user results in an array like:
+	#[username, role, encounter_type_1_count, encounter_type_2_count, ..., encounter_type_NULL_count, total_encounters_count]
+	#FIXME: This is crazy.  There must be some way of converting a hash of hashes (@results) into an array of hashes, and then sorting that array based on one of the hash values.
+	#FIXME: But if we do manage that we still need to build up the totals value.  Probably should do that some where else anyway.
 	@users_array.collect{|u|
-					    temp_user_array = [u] #first item is the username
-					    for r in @results do
-							if r.username == u then 
-								temp_user_array << r.role
-								break
-							end
-					    end
+					    temp_user_array = [u[0]] #first item is the username
+					    #second item is the role
+	   				    temp_user_array << @results[u[1]]['role']
 					    
 					    temp_count_total = 0
 					   @labels_array.collect{|e|  #then we go through all the results and add the counts for all the encounter types, and get total
-										x=0 #will hold number of encounters for this user and encounter type
-										for r in @results do
-													      if (r.username == u and r.encounter_type_name == e) then 
-														      x = r.count.to_i
-														      break
-													      end
-										end										
+										x=@results[u[1]][e[1]]
+										if x.nil? then x=0 end#will hold number of encounters for this user and encounter type
+										
 										temp_user_array << x
 										temp_count_total += x
 										
@@ -226,11 +237,15 @@ def encounters_by_providers
 					   }
 	  
 	  #prepend Username to the array
-	@labels_array = ["Username", "Role"] + @labels_array
-	@labels_array << "total"
+	@labels_array = [["Username", "Username"] , ["Role", "Role"]] +@labels_array
+	@labels_array << ["Total" , ""]
 	
 	@end = end_datetime
 	@start = start_datetime
+	
+	#~ #Make a figure
+    @image_path = make_scruffy_figure(@results)
+	 
 end
 
 #this takes an instance of the Ruby Time class and makes it look right for a mysql querry
@@ -243,7 +258,7 @@ end
 def user_encounter_crosstab(start_datetime, end_datetime)
 		#This works, but is slow
 		results = Hash.new()  # Create a hash to hold our data
-		Encounter.find(:all, :conditions => ["date_created > '#{start_datetime}' and date_created < '#{end_datetime}'"] ).collect{|en| 
+		Encounter.find(:all, :conditions => ["encounter_datetime > '#{start_datetime}' and encounter_datetime < '#{end_datetime}'"] ).collect{|en| 
 		
 				if results[en.provider_id].nil? then#check if provider_id has been seen before
 					results[en.provider_id] = Hash.new(0)  #if it hasn't create a new hash
@@ -257,7 +272,8 @@ def user_encounter_crosstab(start_datetime, end_datetime)
 				
 ########################add totals 
 		}
-		#users = Encounter.find(:all, :conditions => ["date_created > '#{start_datetime}' and date_created < '#{end_datetime}'"] ).collect{|en|
+		# this could replace user_encounter_crosstab_sql, and is more ruby, but doesn't work
+		# users = Encounter.find(:all, :conditions => ["date_created > '#{start_datetime}' and date_created < '#{end_datetime}'"] ).collect{|en|
 			
 		#~ #This is not working the way I think it should, it seems to only do one of the groupings
 		#~ results = Encounter.count(:all, :group => :provider_id , :group =>:encounter_type, 
@@ -267,22 +283,57 @@ def user_encounter_crosstab(start_datetime, end_datetime)
 end
 #This does not seem like the ruby way of doing it, but its fast and works
 def user_encounter_crosstab_sql(start_datetime, end_datetime)
-	sql_string = "SELECT e.provider_id, e.encounter_type, count(*) as count 
-		  FROM encounter e  
-		  WHERE encounter_datetime > '#{start_datetime}' AND encounter_datetime < '#{end_datetime}'
-		  GROUP BY e.provider_id, e.encounter_type "
+	sql_string = "SELECT e.provider_id, e.encounter_type, count(*) as count FROM encounter e WHERE encounter_datetime > '#{start_datetime}' AND encounter_datetime < '#{end_datetime}' GROUP BY e.provider_id, e.encounter_type "
 	results = Encounter.find_by_sql([sql_string])
 	#turn the array of objects into a hash of hashes
 	results_hash = Hash.new()
-	#~ for r in results {
-		
-		#~ ###################
-		#~ ##### fill this in #######
-		#~ ###################
-		
-	#~ {
-	return results
+	for r in results do
+		if results_hash[r.attributes["provider_id"]].nil? then results_hash[r.attributes["provider_id"]] = Hash.new() end
+		results_hash[r.attributes["provider_id"]]["provider_id"] = r.attributes["provider_id"].to_i
+		results_hash[r.attributes["provider_id"]][r.attributes["encounter_type"]] = r.attributes["count"].to_i
+	end
+	return results_hash
 end
+#WTK
+
+#WTK
+  def make_scruffy_figure(data, y_axis_label="X", x_axis_label="Y", title="No Title")
+	stamp = Time.now.to_i.to_s
+    outfile = "/charts/scruffy" + stamp +".png"
+	
+	#~ graph = Scruffy::Graph.new
+	#~ graph.title = title
+	#~ graph.renderer = Scruffy::Renderers::Pie.new
+
+	#~ graph.add :pie, '', {
+		#~ 'Apple' => 20,
+		#~ 'Banana' => 100,
+		#~ 'Orange' => 70,
+		#~ 'Taco' => 30
+	#~ }
+	#~ render_path = "./public"+outfile
+	#~ graph.render :to => render_path 
+	#~ graph.render :width => 300, :height => 200,
+		 #~ :to => render_path, :as => 'png'
+    
+    
+    graph = Scruffy::Graph.new
+    graph.title = title
+    #graph.value_formatter = Scruffy::Formatters::Percentage.new(:precision => 0)
+    for u in @results_array do
+        graph.add :stacked do |stacked|
+                stacked.add :bar, u[0], u[2 .. 5]
+        end
+    end
+    graph.point_markers = @labels_array[2..5]
+    render_path = "./public"+outfile
+    graph.render :to => "render_path"
+    graph.render  :width => 500, :to => render_path, :as => 'png'
+
+
+	return outfile
+   end
+
 #WTK
 
 
