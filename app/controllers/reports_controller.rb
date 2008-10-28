@@ -94,7 +94,7 @@ class ReportsController < ApplicationController
     end
   end
 
-#WTK    REFACTOR:  This should use a common fonction with the set_cohort_date_range
+#WTK    FIXME:  This should probably use a common function with the set_cohort_date_range
   def set_date_range
     if params[:start_year].nil? or params[:end_year].nil?
       @needs_date_picker = true
@@ -120,7 +120,7 @@ class ReportsController < ApplicationController
 def encounters_by_providers
 	redirect_to :action => 'select_encounters_by_providers' and return if params[:id].nil?
 	
-	#FIXME: I think that this week and last week has an overlapping boundry problem for midnight on sunday, not a big deal, but should be fixed.
+	#FIXME: I think that "This week" and "Last week" have an overlapping boundry problem for 1 second at midnight on sunday, not likely to be an issue, but should be fixed.
 	case params["id"]
 		when "Cumulative"
 			start_datetime = Encounter.find(:first, :order => 'encounter_datetime', 
@@ -164,87 +164,28 @@ def encounters_by_providers
 
 		else
 			redirect_to :action => 'select_encounters_by_providers' and return
-	end
-	# FIXME: user_encounter_crosstab_sql() is much faster than user_encounter_crosstab(), but is not very ruby like.
-	@results = user_encounter_crosstab_sql(start_datetime, end_datetime)
-	#~ @results = user_encounter_crosstab(start_datetime, end_datetime)
-
-	# Go through the results (each a hash) and add attributes for the username of the provider, the encounter type name, and provider's role
-	@results.each_key{|provider_id|
-					# get the usernames
-					u =  User.find(:first, :conditions => "user_id = '#{provider_id}'")
-					if u then 
-						@results[provider_id]["username"] = u.username 
-					else 
-							@results[provider_id]["username"] = "NULL" 
-					end
-					
-					#get the user roles, 
-					#FIXME: only looking for first user role, might need to do better
-					ri =  UserRole.find(:first, :conditions => "user_id = '#{provider_id}'")  #
-					if ri then 
-						role = Role.find(:first,:conditions => "role_id =  '#{ri.role_id}'") 
-					end
-					
-					if role then 
-						@results[provider_id]["role"] = role.role 
-					else 
-						@results[provider_id]["role"] = "NULL" 
-					end
-					
-					#~ #get the encounter_types 
-					#~ et = EncounterType.find(:first, :conditions => "encounter_type_id = '#{@results[provider_id]['encounter_type']}'")	
-					#~ if et then @results[provider_id]["encounter_type_name"] = et.name else @results[provider_id]["encounter_type_name"] = "NULL" end
-					
-				  }
-
-	
-	
-	@labels_array = []
-	#FIXME : Need to make the encounter type ids for nill and undefined (in the encounter type table) equal to "NULL"
-	EncounterType.find(:all).collect {|et|  @labels_array << [ et.name, et.encounter_type_id]}
-	#FIXME : Need to make the encounter type ids for nill and undefined (in the encounter type table) equal to "NULL"
-	@labels_array << ["NULL",nil]
-	
-	#Build up an array of all the user names in alphabetical order
-	@users_array = [] 
-	@results.each_key{|u|  @users_array << [@results[u]["username"], u] }
-	@users_array.sort!	
-	
-	@results_array = []
-	#Build up the @results_array array, one user at a time. Each user will get one row in the crosstab table.  Each user results in an array like:
-	#[username, role, encounter_type_1_count, encounter_type_2_count, ..., encounter_type_NULL_count, total_encounters_count]
-	#FIXME: This is crazy.  There must be some way of converting a hash of hashes (@results) into an array of hashes, and then sorting that array based on one of the hash values.
-	#FIXME: But if we do manage that we still need to build up the totals value.  Probably should do that some where else anyway.
-	@users_array.collect{|u|
-					    temp_user_array = [u[0]] #first item is the username
-					    #second item is the role
-	   				    temp_user_array << @results[u[1]]['role']
-					    
-					    temp_count_total = 0
-					   @labels_array.collect{|e|  #then we go through all the results and add the counts for all the encounter types, and get total
-										x=@results[u[1]][e[1]]
-										if x.nil? then x=0 end#will hold number of encounters for this user and encounter type
-										
-										temp_user_array << x
-										temp_count_total += x
-										
-										
-									      }
-					   temp_user_array << temp_count_total
-					   @results_array << temp_user_array
-					   
-					   }
-	  
-	  #prepend Username to the array
-	@labels_array = [["Username", "Username"] , ["Role", "Role"]] +@labels_array
-	@labels_array << ["Total" , ""]
-	
-	@end = end_datetime
+        end
+        
+    #start and end values are needed for the heading in the view
 	@start = start_datetime
+    @end = end_datetime
 	
-	#~ #Make a figure
-    @image_path = make_scruffy_figure(@results)
+    
+    
+	# Get the results and some other hashes that are used for display purposes.
+	@results, @user_ids_hash, @encounter_types_hash, @role_ids_hash  = user_encounter_crosstab(start_datetime, end_datetime)
+
+    #Create an array of user_ids sorted by the roles of the users.  Create a different key and update the view to do a different sort
+    @sort_by_role_key = @results.sort {|a,b| a[1]["role"]<=>b[1]["role"]   }.collect{|i| i[0]}
+
+    #Make an array of 2 element arrays with the key that can be used for looking up a value in the results hash and the display label for the view.
+    # Something like:  [[key_for_results_hash0, display_label0], [key_for_results_hash1, display_label1] , ... ]
+	@labels_array = [["username","User"], ["role", "Role"]]
+    @encounter_types_hash.to_a.collect{|e| @labels_array << e}
+    @labels_array << ["total", "Total"]
+		
+	#Make a figure
+    @image_paths = make_scruffy_pies()
 	 
 end
 
@@ -255,7 +196,8 @@ end
 	
 	
 #Should this  be in the User model?  Creae a hash of hashes: {provider_id => {encounter_type_id => number or encounters, ...}, ...}
-def user_encounter_crosstab(start_datetime, end_datetime)
+#This no longer works.  Kept for reference only
+def user_encounter_crosstab_old(start_datetime, end_datetime)
 		#This works, but is slow
 		results = Hash.new()  # Create a hash to hold our data
 		Encounter.find(:all, :conditions => ["encounter_datetime > '#{start_datetime}' and encounter_datetime < '#{end_datetime}'"] ).collect{|en| 
@@ -266,72 +208,110 @@ def user_encounter_crosstab(start_datetime, end_datetime)
 				
 				if  results[en.provider_id][en.encounter_type].nil? then #check if provider/encounter has been seen before
 					results[en.provider_id][en.encounter_type] = 1 #if not initialize
-				else 
+                  else 
 					results[en.provider_id][en.encounter_type] += 1  #if so increment
 				end
-				
-########################add totals 
 		}
-		# this could replace user_encounter_crosstab_sql, and is more ruby, but doesn't work
-		# users = Encounter.find(:all, :conditions => ["date_created > '#{start_datetime}' and date_created < '#{end_datetime}'"] ).collect{|en|
-			
-		#~ #This is not working the way I think it should, it seems to only do one of the groupings
-		#~ results = Encounter.count(:all, :group => :provider_id , :group =>:encounter_type, 
-			#~ :conditions =>  ["date_created > '#{start_datetime}' and date_created < '#{end_datetime}'"] )
-		return results
+
+        return results
 	
 end
-#This does not seem like the ruby way of doing it, but its fast and works
-def user_encounter_crosstab_sql(start_datetime, end_datetime)
+
+
+def user_encounter_crosstab(start_datetime, end_datetime)
+    #This does not seem like the ruby way of doing it, but its fast and works
 	sql_string = "SELECT e.provider_id, e.encounter_type, count(*) as count FROM encounter e WHERE encounter_datetime > '#{start_datetime}' AND encounter_datetime < '#{end_datetime}' GROUP BY e.provider_id, e.encounter_type "
 	results = Encounter.find_by_sql([sql_string])
-	#turn the array of objects into a hash of hashes
-	results_hash = Hash.new()
+	
+    user_ids_hash = {} # hash with all the user ids and usernames that are included in the results
+        results.each {|r|
+                            user = User.find(:first, :conditions => "user_id = '#{r.attributes["provider_id"]}'")
+                            if user then 
+                                    user_ids_hash[r.attributes["provider_id"]] = user.username 
+                              else 
+                                    user_ids_hash[r.attributes["provider_id"]] = "id#"+ r.attributes["provider_id"].to_s  
+                            end
+                        }
+
+     role_ids_hash = {} # hash with all the user ids and usernames that are included in the results
+     role_ids_hash["NoRole"] = "NoRole"
+        results.each {|r|
+                            ri = UserRole.find(:first, :conditions => "user_id = '#{r.attributes["provider_id"]}'")
+                            if ri then 
+                                role = Role.find(:first,:conditions => "role_id =  '#{ri.role_id}'") 
+                                if role then
+                                    role_ids_hash[ri.role_id] = role.role
+                                  else 
+                                    role_ids_hash[ri.role_id] = "roleID#" + ri.role_id.to_s
+                                end
+                                
+                            end
+                        }                       
+    
+    encounter_types_hash = {} # hash with all the encounter type ids and encounter type names that are included in the results
+        results.each {|r|
+                            encounter = EncounterType.find(:first, :conditions => "encounter_type_id = '#{r.attributes["encounter_type"]}'")
+
+                            if encounter then 
+                                encounter_types_hash[r.attributes["encounter_type"]] = encounter.name
+                              else 
+                                encounter_types_hash[r.attributes["encounter_type"]] = "et#"+ r.attributes["encounter_type"].to_s  
+                            end
+                        }
+                        
+    results_hash = Hash.new() #turn the array of objects into a hash of hashes, 
 	for r in results do
-		if results_hash[r.attributes["provider_id"]].nil? then results_hash[r.attributes["provider_id"]] = Hash.new() end
-		results_hash[r.attributes["provider_id"]]["provider_id"] = r.attributes["provider_id"].to_i
-		results_hash[r.attributes["provider_id"]][r.attributes["encounter_type"]] = r.attributes["count"].to_i
+		if results_hash[r.attributes["provider_id"]].nil? then results_hash[r.attributes["provider_id"]] = Hash.new() end #initialise the user's hash
+		results_hash[r.attributes["provider_id"]]["provider_id"] = r.attributes["provider_id"].to_i #add provider_id to the user hash
+		results_hash[r.attributes["provider_id"]][r.attributes["encounter_type"]] = r.attributes["count"].to_i #add the encounter_type count to the user hash
+        results_hash[r.attributes["provider_id"]]["total"] =  results_hash[r.attributes["provider_id"]]["total"].to_i + r.attributes["count"].to_i #running tally of total number of encounters
+        results_hash[r.attributes["provider_id"]]["username"] =  user_ids_hash[r.attributes["provider_id"]] #add username using the previously defined user_ids_hash
+        #add the role_id
+        ri = UserRole.find(:first, :conditions => "user_id = '#{r.attributes["provider_id"]}'")
+        if ri then results_hash[r.attributes["provider_id"]]["role_id"] =  ri.role_id
+          else
+            results_hash[r.attributes["provider_id"]]["role_id"] =  "NoRole"
+        end
+        #use the role_id and the previously defined role_ids_hash, to add the role name
+        results_hash[r.attributes["provider_id"]]["role"] =  role_ids_hash[results_hash[r.attributes["provider_id"]]["role_id"]]
 	end
-	return results_hash
+    
+	return results_hash, user_ids_hash, encounter_types_hash, role_ids_hash
 end
 #WTK
 
 #WTK
-  def make_scruffy_figure(data, y_axis_label="X", x_axis_label="Y", title="No Title")
-	stamp = Time.now.to_i.to_s
-    outfile = "/charts/scruffy" + stamp +".png"
-	
-	#~ graph = Scruffy::Graph.new
-	#~ graph.title = title
-	#~ graph.renderer = Scruffy::Renderers::Pie.new
+  def make_scruffy_pies()
 
-	#~ graph.add :pie, '', {
-		#~ 'Apple' => 20,
-		#~ 'Banana' => 100,
-		#~ 'Orange' => 70,
-		#~ 'Taco' => 30
-	#~ }
-	#~ render_path = "./public"+outfile
-	#~ graph.render :to => render_path 
-	#~ graph.render :width => 300, :height => 200,
-		 #~ :to => render_path, :as => 'png'
-    
-    
-    graph = Scruffy::Graph.new
-    graph.title = title
-    #graph.value_formatter = Scruffy::Formatters::Percentage.new(:precision => 0)
-    for u in @results_array do
-        graph.add :stacked do |stacked|
-                stacked.add :bar, u[0], u[2 .. 5]
+    outfiles = []
+    for et_id, et_name in @encounter_types_hash do
+        total = 0
+        counts = []
+        et_hash = {}
+        graph = Scruffy::Graph.new
+        graph.renderer = Scruffy::Renderers::Pie.new
+        #~ graph.value_formatter = Scruffy::Formatters::Percentage.new(:precision => 0)
+        for user in @results.keys() do
+            name = @results[user]["username"]
+            count = @results[user][et_id]
+            if count then 
+                  et_hash[name] = count.to_i
+            end
+        
         end
+        graph.add :pie,  '', et_hash
+        stamp = Time.now.to_i.to_s
+        outfile = "/charts/scruffy" +et_id.to_s+ stamp +".png"
+        outfiles << outfile
+        graph.title = et_name 
+        render_path = "./public"+outfile
+        graph.render :to => render_path
+        graph.render  :width => 1000, :to => render_path, :as => 'png'
+        
     end
-    graph.point_markers = @labels_array[2..5]
-    render_path = "./public"+outfile
-    graph.render :to => "render_path"
-    graph.render  :width => 500, :to => render_path, :as => 'png'
+   
+	return outfiles
 
-
-	return outfile
    end
 
 #WTK

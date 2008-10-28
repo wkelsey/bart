@@ -7,13 +7,13 @@
 
 <table>
 <tr>
-<%= 	@labels_array.collect{|label|" <th>#{label[0]}</th> "   }    %>
+<%= 	@labels_array.collect{|label|" <th>#{label[1]}</th> "   }    %>
 </tr>
-<% @results_array.each  do |u|%>   
+<% @sort_by_role_key.each  do |user|%>   
 						<tr> 
-						<%for c in u.collect do  %>
+						<%for label in @labels_array do  %>
 								  <td>
-									<%= c.to_s %>
+									<%=if @results[user][label[0]].nil? then "0" else @results[user][label[0]] end %>
 								  </td> 
 								 <% end%>
 						</tr>  
@@ -25,20 +25,36 @@
 ++++++++++++++++++++++++++++++
 <table>
 <tr span=50%><td>< %= @users_array.to_yaml %></td><td class="valueCol">@users_array.to_yaml</td></tr>
-<tr span=50%><td>< %= @labels_array.to_yaml %></td><td class="valueCol">@labels_array.to_yaml</td></tr>
+<tr span=50%><td><pre>< %= @labels_array.to_yaml %></td></pre><td class="valueCol">@labels_array.to_yaml</td></tr>
 <tr span=50%><td>< %= @labels_array.length %></td><td class="valueCol">@labels_array.length</td></tr>
 <tr span=50%><td>< %= @results_array.type %></td><td class="valueCol">@results_array.type</td></tr>
 <tr span=50%><td>< %= @results_array.length %></td><td class="valueCol">@results_array.length</td></tr>
 <tr span=50%><td><pre>< %= @results_array.to_yaml %></pre></td><td class="valueCol">@results_array</td></tr>
-<tr span=50%><td><pre><%=@results.to_yaml%></pre></td><td class="valueCol">@results.to_yaml</td></tr><tr span=50%>
-<tr span=50%><td><pre><%=@results%></pre></td><td class="valueCol">@results</td></tr><tr span=50%>
-<tr span=50%><td><pre><%=@image_path%></pre></td><td class="valueCol">@image_path</td></tr><tr span=50%>
-<tr span=50%><td><pre><%=@image_path.class%></pre></td><td class="valueCol">@image_path.class</td></tr><tr span=50%>
+<tr span=50%><td><pre>< %=@results.to_yaml%></pre></td><td class="valueCol">@results.to_yaml</td></tr><tr span=50%>
+<tr span=50%><td><pre>< %=@results%></pre></td><td class="valueCol">@results</td></tr><tr span=50%>
+<tr span=50%><td><pre>< %=@image_path%></pre></td><td class="valueCol">@image_path</td></tr><tr span=50%>
+<tr span=50%><td><pre>< %=@user_ids_hash.to_yaml%></pre></td><td class="valueCol">@user_ids_hash.to_yaml</td></tr><tr span=50%>
+<tr span=50%><td><pre>< %=@encounter_types_hash.to_yaml %></pre></td><td class="valueCol">@encounter_types_hash.to_yaml </td></tr><tr span=50%>
+<tr span=50%><td><pre>< %=@role_ids_hash.to_yaml %></pre></td><td class="valueCol">@role_ids_hash.to_yaml </td></tr><tr span=50%>
+<tr span=50%><td><pre>< %=@sorted_by_role.to_yaml %></pre></td><td class="valueCol">@sorted_by_role.to_yaml</td></tr><tr span=50%>
+<tr span=50%><td><pre>< %=@results.sort.to_yaml %></pre></td><td class="valueCol">@results.sort.to_yaml </td></tr><tr span=50%>
+<tr span=50%><td><pre>< %=@results.sort.class %></pre></td><td class="valueCol">@results.sort.class </td></tr><tr span=50%>
+<tr span=50%><td><pre>< %=@results.sort[0].class %></pre></td><td class="valueCol">@results.sort[0].class </td></tr><tr span=50%>
+<tr span=50%><td><pre>< %=@results.sort[0][1].class %></pre></td><td class="valueCol">@results.sort[0][1].class </td></tr><tr span=50%>
+<tr span=50%><td><pre>< %=@sort_by_role_key.to_yaml %></pre></td><td class="valueCol">@sort_by_role_key.to_yaml </td></tr><tr span=50%>
+<tr span=50%><td><pre>< %=@sorted_by_role.class %></pre></td><td class="valueCol">@sorted_by_role.class </td></tr><tr span=50%>
+<tr span=50%><td><pre>< %=@sort_by_role_key.class %></pre></td><td class="valueCol">@sort_by_role_key.class </td></tr><tr span=50%>
+<tr span=50%><td><pre>< %= %></pre></td><td class="valueCol"> </td></tr><tr span=50%>
+<tr span=50%><td><pre>< %= %></pre></td><td class="valueCol"> </td></tr><tr span=50%>
+<tr span=50%><td><pre>< %= %></pre></td><td class="valueCol"> </td></tr><tr span=50%>
+
 </table>
 
 
 +++
-<img src= "<%=@image_path%>" alt= '<%=@image_path%>'>
+<%for path in @image_paths do  %>
+<img src= "<%=path%>" alt= '<%=@path%>'>
+<% end %>
 +++
 
 <!-- WTK -->
