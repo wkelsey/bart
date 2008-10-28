@@ -878,6 +878,14 @@ HAVING (encounter.encounter_type = #{EncounterType.find_by_name('Give drugs').id
     render(:layout => "layouts/menu")
   end
 
+  def encounters_by_providers_graph
+    @current_encounter = Hash.new
+    ["Update outcome","General Reception","HIV Reception","TB Reception","Height/Weight","ART Visit","Give drugs","HIV Staging"].each{|encounter_name|
+      enc_type=EncounterType.find_by_name(encounter_name).id
+      @current_encounter[encounter_name] = Encounter.find(:all,:include => "patient",:conditions => ["(DATE(encounter_datetime) >= ? and DATE(encounter_datetime) <=?) and encounter_type=?",Date.today,Date.today,enc_type])
+    }
+  end
+
 end
 
 

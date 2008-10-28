@@ -1,7 +1,7 @@
 <%= stylesheet_link_tag "users_encounters_graph" %>
 <script language="javascript">
   function show_total(total){
-    document.getElementById("results").innerHTML = total;
+    document.getElementById("results").innerHTML = total + " encounters";
   }
   
   function hide_total(total){
@@ -9,40 +9,72 @@
   }
 </script>
 
+<%
+  art_visits = @current_encounter["ART Visit"].length
+  height_weight = @current_encounter["Height/Weight"].length
+  hiv_staging = @current_encounter["HIV Staging"].length
+  tb_recption = @current_encounter["TB Reception"].length
+  hiv_reception = @current_encounter["HIV Reception"].length
+  give_drugs = @current_encounter["Give drugs"].length
+  general_reception = @current_encounter["General Reception"].length
+  update_outcome = @current_encounter["Update outcome"].length
+
+  total_encounter = (art_visits + height_weight + hiv_staging + tb_recption + hiv_reception + give_drugs + general_reception + update_outcome)
+  if total_encounter!=0
+    art_visits_percent = ((art_visits.to_f * 100)/total_encounter)
+    height_weight_percent = ((height_weight.to_f * 100)/total_encounter)
+    hiv_staging_percent = ((hiv_staging.to_f * 100)/total_encounter)
+    tb_reception_percent = ((tb_recption.to_f * 100)/total_encounter)
+    hiv_reception_percent = ((hiv_reception.to_f * 100)/total_encounter)
+    give_drugs_percent = ((give_drugs.to_f * 100)/total_encounter)
+    general_reception_percent = ((general_reception.to_f * 100)/total_encounter)
+    update_outcome_percent = ((update_outcome.to_f * 100)/total_encounter)
+    
+    art_visits_percent = 1.5 if art_visits_percent > 0 and art_visits_percent <= 1
+    height_weight_percent = 1.5 if height_weight_percent > 0 and height_weight_percent <=1
+    hiv_staging_percent = 1.5 if hiv_staging_percent > 0 and hiv_staging_percent <=1
+    tb_reception_percent = 1.5 if tb_reception_percent >0 and tb_receptin_percent <=1
+    hiv_reception_percent = 1.5 if hiv_reception_percent > 0 and hiv_reception_percent <=1
+    give_drugs_percent = 1.5 if give_drugs_percent > 0 and give_drugs_percent <=1
+    general_reception_percent = 1.5 if general_reception_percent > 0 and general_reception_percent <=1
+    update_outcome_percent = 1.5 if update_outcome_percent > 0 and update_outcome_percent <=1
+  end
+%>
+
+
 <div id='results'>
-  420
 </div>
 
 <div id='leftcontent'>
 <ul id="q-graph">
 <li class="qtr" id="q1">
 <ul>
-<li class="sent bar" style="height: 111px;"><p>$18,450.00</p></li>
-<li class="paid bar" style="height: 99px;"><p>$16,500.00</p></li>
+<li class="sent bar"  onmouseout="hide_total()" onmouseover="show_total(<%=art_visits%>)" style="height: <%=art_visits_percent%>%; background:#7CFC00;"></li>
+<li class="paid bar"  onmouseout="hide_total()" onmouseover="show_total(<%=hiv_staging%>)" style="height: <%=hiv_staging_percent%>%; background:#7FFF00;"></li>
 
 </ul>
 </li>
 
 <li class="qtr" id="q2">
 <ul>
-<li class="sent bar"  onmouseout="hide_total()" onmouseover="show_total('233')" style="height: 206px;"><p>$34,340.72</p></li>
-<li class="paid bar" style="height: 194px;"><p>$32,340.72</p></li>
+<li class="sent bar"  onmouseout="hide_total()" onmouseover="show_total(<%=height_weight%>)" style="height: <%=height_weight_percent%>%; background: #FFFF00;"></li>
+<li class="paid bar"  onmouseout="hide_total()" onmouseover="show_total(<%=give_drugs%>)" style="height: <%=give_drugs_percent%>%; background:#9ACD32;"></li>
 
 </ul>
 </li>
 
 <li class="qtr" id="q3">
 <ul>
-<li class="sent bar" style="height: 259px;"><p>$43,145.52</p></li>
-<li class="paid bar" style="height: 193px;"><p>$32,225.52</p></li>
+<li class="sent bar"  onmouseout="hide_total()" onmouseover="show_total(<%=hiv_reception%>)" style="height: <%=hiv_reception_percent%>%; background:#DAA520;"></li>
+<li class="paid bar"  onmouseout="hide_total()" onmouseover="show_total(<%=tb_recption%>)" style="height: <%=tb_reception_percent%>%; background:#BDB76B;"></li>
 
 </ul>
 </li>
 
 <li class="qtr" id="q4">
 <ul>
-<li class="sent bar" style="height: 110px;"><p>$18,415.96</p></li>
-<li class="paid bar" style="height: 195px;"><p>$32,425.00</p></li>
+<li class="sent bar" onmouseout="hide_total()" onmouseover="show_total(<%=update_outcome%>)" style="height: <%=update_outcome_percent%>%; background:#008B8B;"></li>
+<li class="paid bar" onmouseout="hide_total()" onmouseover="show_total(<%=general_reception%>)" style="height: <%=general_reception_percent%>%; background:#0000FF;"></li>
 
 </ul>
 </li>
@@ -51,5 +83,15 @@
 </table>
 </div>
 <div id='rightcontent'>
- dadaadad
+   <b><u>Encounters</u></b></p>
+   Total:<%= total_encounter%></p>
+   ART visits:<%=@current_encounter["ART Visit"].length%></p>
+   Height/Weight:<%=@current_encounter["Height/Weight"].length%></p>
+   HIV staging:<%=@current_encounter["HIV Staging"].length%></p>
+   TB recption:<%=@current_encounter["TB Reception"].length%></p>
+   HIV reception:<%=@current_encounter["HIV Reception"].length%></p>
+   Give drugs:<%=@current_encounter["Give drugs"].length%></p>
+   General reception:<%=@current_encounter["General Reception"].length%></p>
+   Update outcome:<%=@current_encounter["Update outcome"].length%></p>
 </div>
+<%=total_encounter%>
