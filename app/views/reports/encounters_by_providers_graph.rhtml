@@ -1,0 +1,55 @@
+<%= stylesheet_link_tag "users_encounters_graph" %>
+<script language="javascript">
+  function show_total(total){
+    document.getElementById("results").innerHTML = total;
+  }
+  
+  function hide_total(total){
+    document.getElementById("results").innerHTML = "";
+  }
+</script>
+
+<div id='results'>
+  420
+</div>
+
+<div id='leftcontent'>
+<ul id="q-graph">
+<li class="qtr" id="q1">
+<ul>
+<li class="sent bar" style="height: 111px;"><p>$18,450.00</p></li>
+<li class="paid bar" style="height: 99px;"><p>$16,500.00</p></li>
+
+</ul>
+</li>
+
+<li class="qtr" id="q2">
+<ul>
+<li class="sent bar"  onmouseout="hide_total()" onmouseover="show_total('233')" style="height: 206px;"><p>$34,340.72</p></li>
+<li class="paid bar" style="height: 194px;"><p>$32,340.72</p></li>
+
+</ul>
+</li>
+
+<li class="qtr" id="q3">
+<ul>
+<li class="sent bar" style="height: 259px;"><p>$43,145.52</p></li>
+<li class="paid bar" style="height: 193px;"><p>$32,225.52</p></li>
+
+</ul>
+</li>
+
+<li class="qtr" id="q4">
+<ul>
+<li class="sent bar" style="height: 110px;"><p>$18,415.96</p></li>
+<li class="paid bar" style="height: 195px;"><p>$32,425.00</p></li>
+
+</ul>
+</li>
+
+</ul>
+</table>
+</div>
+<div id='rightcontent'>
+ dadaadad
+</div>
